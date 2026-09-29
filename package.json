@@ -12,20 +12,28 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./schema/001_operations.sql": "./schema/001_operations.sql"
   },
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "schema",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node test/core.test.mjs",
+    "test:postgres": "npm run build && node test/postgres.test.mjs",
     "prepack": "npm run build"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
   }
 }

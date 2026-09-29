@@ -52,8 +52,8 @@ If reconciliation remains inconclusive, the operation stays `unknown`. A stale `
 ## Roadmap phases
 
 1. **Foundation:** package metadata, TypeScript build, documentation, and a bounded v0.1 design.
-2. **Contract and in-memory model:** define operation identity, input fingerprinting, transition rules, result types, and a storage interface; test conflicts, replay, and uncertain outcomes.
-3. **PostgreSQL durability:** schema, atomic claims and transitions, persisted evidence, and concurrent-process tests.
+2. **Contract and in-memory model (complete):** define operation identity, input fingerprinting, transition rules, result types, and a storage interface; test conflicts, replay, and uncertain outcomes.
+3. **PostgreSQL durability (complete):** schema, atomic claims and transitions, persisted evidence, and concurrent-process tests.
 4. **Explicit reconciliation:** callback or adapter contract, evidence recording, and tests for conclusive and inconclusive findings.
 5. **v0.1 readiness:** examples, API review, failure-mode tests, packaging checks, and a release decision based on demonstrated behavior.
 
@@ -66,16 +66,25 @@ If reconciliation remains inconclusive, the operation stays `unknown`. A stale `
 - Unknown outcomes are durable and are never retried automatically.
 - Reconciliation must be explicit, evidence-based, and provider-specific through an adapter or callback.
 - The project does not claim exactly-once execution.
-- The package remains private and at version `0.0.0` while it has no usable API.
+- The package remains private and at version `0.0.0` until the v0.1 readiness review.
+- Input equality uses canonical JSON with sorted object keys and ordered arrays, then SHA-256 under the version tag `sha256-json-v1`. Values outside JSON, nonfinite numbers, sparse arrays, and cyclic structures are rejected.
+- Confirmed no-effect outcomes are terminal for their key in v0.1. A new action requires a new business key and an application decision that it is safe.
+- Results, failures, and evidence details are JSON values. The core copies them at the in-memory store boundary so caller mutation cannot change recorded facts.
+- Claim ownership uses a random claim ID. A stale claim is moved to `unknown` after an application-selected age; age alone never permits redispatch.
+- Resolution evidence is caller supplied and must have a nonempty basis. Provider-specific verification remains a later phase.
+- PostgreSQL uses one conditional statement per state change, with the operation key as the primary key. It does not keep a transaction open during an external call.
+- The application owns a shared `pg` connection pool and applies the versioned schema migration before use. The library does not run migrations automatically.
 
 ## Current implementation status
 
-The repository has package metadata, a strict TypeScript build, an empty public module, and project documentation. No effect lifecycle behavior, persistence adapter, reconciliation adapter, or npm release exists.
+Phases 1–3 are complete. Phase 3 is implemented and verified against a local PostgreSQL 18.4 server. The public module also exports `PostgresOperationStore`, backed by a constrained PostgreSQL table. Claims, claim completion, stale recovery, and reconciliation use conditional atomic statements. Results, failures, and evidence use JSONB; an explicit flag preserves the distinction between missing evidence details and JSON `null`. Phases 4 and 5 remain: explicit provider reconciliation, followed by v0.1 readiness and a release decision.
 
 ## Completed work
 
 - Established the repository's initial package structure and Apache-2.0 licensing.
 - Documented the problem, scope, proposed state machine, and path to v0.1.
+- Implemented the Phase 2 contract, versioned input fingerprinting, in-memory state machine, and focused behavior tests.
+- Added a PostgreSQL migration, durable store, usage guide, and integration tests that launch separate Node workers against one key.
 
 ## Tests completed
 
@@ -83,16 +92,15 @@ The repository has package metadata, a strict TypeScript build, an empty public 
 - `npm run typecheck` and `npm run build` passed.
 - `npm pack --dry-run` included the README, license, compiled entry point, and TypeScript declarations.
 
-No behavior tests exist yet. The first behavior tests belong with the operation contract and state transitions.
+Phase 2: `npm run typecheck` and `npm test` passed. Nine behavior tests cover canonical fingerprints and invalid values, key conflicts, concurrent claims, result replay and isolation from mutation, terminal no-effect replay, unknown outcomes and both reconciliation conclusions, stale claim recovery, claim ownership, and key validation.
+
+Phase 3: `npm run typecheck`, all nine in-memory tests, `npm pack --dry-run`, and all three PostgreSQL integration tests passed. The PostgreSQL tests ran against a disposable local PostgreSQL 18.4 server and covered eight separate processes contending for one claim, replay after a new pool, durable unknown recovery and reconciliation, and competing terminal transitions. To run them again, set `TEST_DATABASE_URL` to a disposable PostgreSQL database.
 
 ## Unresolved technical questions
 
-- How should input equality be defined and versioned, especially for semantically equivalent JSON inputs and sensitive fields?
-- Which value types and serialization rules should be supported for stored results and evidence?
-- What exact boundary proves a failure occurred before dispatch, and who supplies that proof?
-- How should claim ownership, timeouts, and process recovery work across concurrent workers?
+- What exact boundary proves a failure occurred before dispatch, and how should an adapter present that proof?
+- Which PostgreSQL deployment settings and operational monitoring are required for a production release?
 - What evidence is sufficient to close an unknown outcome as `confirmed_no_effect` for providers with delayed visibility?
-- Should a confirmed pre-dispatch failure be terminal for its key, or can it be explicitly reopened under controlled rules?
 - What is the smallest useful provider adapter contract, including providers that support their own idempotency keys?
 
 ## Known risks
@@ -105,4 +113,4 @@ No behavior tests exist yet. The first behavior tests belong with the operation 
 
 ## Next recommended task
 
-Define the v0.1 operation contract and transition rules in TypeScript, starting with key and input matching, atomic claim semantics, confirmed-result replay, and durable unknown outcomes. Write focused tests for these rules before implementing the PostgreSQL store.
+Define the explicit provider reconciliation callback or adapter contract in Phase 4, including what evidence can conclusively establish no effect after a lost response.
